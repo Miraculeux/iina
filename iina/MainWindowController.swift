@@ -80,6 +80,8 @@ class MainWindowController: PlayerWindowController {
   var titleBarHeightConstraint: NSLayoutConstraint!
   var oscBottomView: OSCBottomView!
   var oscFloatingView: OSCFloatingView!
+  private(set) var oscFloatingPanel: NSPanel?
+  private var oscPreviewPanel: NSPanel?
 
   var currentControlBar: NSView?
 
@@ -913,6 +915,7 @@ class MainWindowController: PlayerWindowController {
         button.image = Preference.ToolBarButton.liveText.alternateImage()
       }
       button.action = #selector(self.toolBarButtonAction(_:))
+      button.target = self
       oscToolbarView.addView(button, in: .trailing)
     }
 
@@ -950,8 +953,85 @@ class MainWindowController: PlayerWindowController {
     }
   }
 
+  func detachFloatingOSC() {
+    guard oscFloatingPanel == nil, let window, let contentView = window.contentView else { return }
+    contentView.layoutSubtreeIfNeeded()
+    let screenFrame = window.convertToScreen(oscFloatingView.convert(oscFloatingView.bounds, to: nil))
+    let panel = NSPanel(contentRect: screenFrame, styleMask: [.borderless, .nonactivatingPanel],
+                        backing: .buffered, defer: false)
+    panel.isReleasedWhenClosed = false
+    panel.isOpaque = false
+    panel.backgroundColor = .clear
+    panel.hasShadow = false
+    panel.hidesOnDeactivate = false
+    panel.becomesKeyOnlyIfNeeded = true
+    panel.isMovable = false
+    panel.acceptsMouseMovedEvents = true
+    panel.collectionBehavior = [.fullScreenAuxiliary]
+    panel.nextResponder = self
+    oscFloatingView.removeFromSuperview()
+    panel.contentView!.addSubview(oscFloatingView)
+    oscFloatingView.padding(.all)
+    panel.contentView!.addTrackingArea(NSTrackingArea(
+      rect: .zero,
+      options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved, .enabledDuringMouseDrag],
+      owner: self, userInfo: ["obj": 2]))
+    oscFloatingPanel = panel
+    fadeableViews.update()
+    showUI()
+    window.addChildWindow(panel, ordered: .above)
+    panel.orderFront(nil)
+    let previewPanel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                               backing: .buffered, defer: false)
+    previewPanel.isReleasedWhenClosed = false
+    previewPanel.isOpaque = false
+    previewPanel.backgroundColor = .clear
+    previewPanel.hasShadow = false
+    previewPanel.hidesOnDeactivate = false
+    previewPanel.ignoresMouseEvents = true
+    previewPanel.collectionBehavior = [.fullScreenAuxiliary]
+    [timePreviewView, thumbnailPeekView].forEach { preview in
+      preview!.removeFromSuperview()
+      previewPanel.contentView!.addSubview(preview!)
+      preview!.isHidden = true
+    }
+    oscPreviewPanel = previewPanel
+    player.refreshSyncUITimer()
+  }
+
+  func hideFloatingOSCPreview() {
+    guard let previewPanel = oscPreviewPanel else { return }
+    previewPanel.parent?.removeChildWindow(previewPanel)
+    previewPanel.orderOut(nil)
+  }
+
+  private func restoreFloatingOSC() {
+    guard let panel = oscFloatingPanel, let contentView = window?.contentView else { return }
+    hideFloatingOSCPreview()
+    [timePreviewView, thumbnailPeekView].forEach { preview in
+      preview!.removeFromSuperview()
+      contentView.addSubview(preview!)
+      preview!.isHidden = true
+    }
+    oscPreviewPanel?.close()
+    oscPreviewPanel = nil
+    panel.parent?.removeChildWindow(panel)
+    oscFloatingView.removeFromSuperview()
+    panel.close()
+    oscFloatingPanel = nil
+    contentView.addSubview(oscFloatingView)
+    oscFloatingView.setupConstraints()
+    oscFloatingView.initPosition()
+    oscFloatingView.isDragging = false
+    fadeableViews.update()
+  }
+
   private func setupOnScreenController(withPosition newPosition: Preference.OSCPosition, forced: Bool = false) {
     guard forced || oscPosition != newPosition else { return }
+
+    if newPosition != .floating {
+      restoreFloatingOSC()
+    }
 
     let isSwitchingToTop = newPosition == .top
     let isSwitchingFromTop = oscPosition == .top
@@ -1262,6 +1342,9 @@ class MainWindowController: PlayerWindowController {
       // slider
       if oscFloatingView.isDragging { return }
       refreshSeekTimeAndThumbnail(from: event)
+    } else if obj == 2 {
+      showUI()
+      destroyTimer()
     }
   }
 
@@ -1283,6 +1366,11 @@ class MainWindowController: PlayerWindowController {
     } else if obj == 1 {
       // slider
       refreshSeekTimeAndThumbnail(from: event)
+    } else if obj == 2 {
+      hideFloatingOSCPreview()
+      if !oscFloatingView.isDragging {
+        updateTimer()
+      }
     }
   }
 
@@ -1290,7 +1378,7 @@ class MainWindowController: PlayerWindowController {
     guard !interactiveMode.isActive else { return }
 
     refreshSeekTimeAndThumbnail(from: event)
-    if isMouseInWindow {
+    if isMouseInWindow || event.window == oscFloatingPanel {
       showUI()
     }
     // check whether mouse is in osc
@@ -1418,6 +1506,7 @@ class MainWindowController: PlayerWindowController {
   }
 
   func windowWillClose(_ notification: Notification) {
+    restoreFloatingOSC()
     shouldApplyInitialWindowSize = true
     // Close PIP
     if pipStatus == .inPIP {
@@ -2064,11 +2153,18 @@ class MainWindowController: PlayerWindowController {
   @objc func hideUIAndCursor() {
     // don't hide UI when dragging control bar
     if oscFloatingView.isDragging { return }
+    if let panel = oscFloatingPanel, panel.isVisible, !panel.ignoresMouseEvents,
+       panel.frame.contains(NSEvent.mouseLocation) { return }
     hideUI()
-    NSCursor.setHiddenUntilMouseMoves(true)
+    if isMouseInWindow {
+      NSCursor.setHiddenUntilMouseMoves(true)
+    }
   }
 
   func hideUI(force: Bool = false) {
+    if force {
+      restoreFloatingOSC()
+    }
     // Don't hide UI when in PIP
     guard pipStatus == .notInPIP || animationState == .hidden else {
       return
@@ -2076,6 +2172,7 @@ class MainWindowController: PlayerWindowController {
     // Don't hide UI when auto hide control bar is disabled
     guard force || Preference.bool(for: .enableControlBarAutoHide) else { return }
 
+    hideFloatingOSCPreview()
     animationState = .willHide
     player.refreshSyncUITimer()
     fadeableViews.forEach { (v) in
@@ -2099,6 +2196,7 @@ class MainWindowController: PlayerWindowController {
             v.isHidden = true
           }
         }
+        self.oscFloatingPanel?.ignoresMouseEvents = true
         self.animationState = .hidden
       }
     }
@@ -2107,6 +2205,7 @@ class MainWindowController: PlayerWindowController {
   func showUI() {
     if player.disableUI { return }
     guard !liveText.isActive, !interactiveMode.isActive else { return }
+    oscFloatingPanel?.ignoresMouseEvents = false
     animationState = .willShow
     fadeableViews.forEach { (v) in
       v.isHidden = false
@@ -2290,12 +2389,13 @@ class MainWindowController: PlayerWindowController {
   /// This will either show & position, or hide, as appropriate, `thumbnailPeekView` and/or `timePreviewView`.
   private func refreshSeekTimeAndThumbnail(from event: NSEvent) {
     let isCoveredByOSD = !osdView.isHidden && event.inAnyOf([osdView])
-    let isCoveredBySidebar = sidebars.isEventCoveringVisibleSidebar(event)
+    let isCoveredBySidebar = event.window == window && sidebars.isEventCoveringVisibleSidebar(event)
     if !playSlider.isHidden && event.inAnyOf([playSlider]), !isCoveredByOSD, !isCoveredBySidebar {
       updateTimePreviewAndThumbnail(event.locationInWindow)
     } else {
       thumbnailPeekView.isHidden = true
       timePreviewView.isHidden = true
+      hideFloatingOSCPreview()
     }
   }
 
@@ -2310,6 +2410,10 @@ class MainWindowController: PlayerWindowController {
   ///   - thumbnailHeight: The height of the thumbnail.
   /// - Returns: `true` if the thumbnail can be shown above the slider, `false` otherwise.
   private func canShowThumbnailAbove(timePreviewYPos: Double, thumbnailHeight: Double) -> Bool {
+    if let panel = oscFloatingPanel, let screen = panel.screen {
+      return panel.frame.minY + timePreviewYPos + timePreviewView.frame.height + thumbnailHeight + 5
+        <= screen.visibleFrame.maxY
+    }
     guard oscPosition != .bottom else { return true }
     guard oscPosition != .top else { return false }
     // The layout preference for the on screen controller is set to the default floating layout.
@@ -3003,6 +3107,7 @@ class MainWindowController: PlayerWindowController {
     guard let duration = player.info.videoDuration else {
       thumbnailPeekView.isHidden = true
       timePreviewView.isHidden = true
+      hideFloatingOSCPreview()
       return
     }
 
@@ -3012,7 +3117,7 @@ class MainWindowController: PlayerWindowController {
     timePreviewView.isHidden = false
     let previewTime = duration * percentage
     updateTimePreview(percentage)
-    let sliderFrameInWindow = playSlider.convert(playSlider.frame, to: nil)
+    let sliderFrameInWindow = playSlider.convert(playSlider.bounds, to: nil)
 
     if player.info.thumbnailsReady, let image = player.info.getThumbnail(forSecond: previewTime.second)?.image {
       thumbnailPeekView.imageView.image = image.rotate(rotation)
@@ -3036,6 +3141,24 @@ class MainWindowController: PlayerWindowController {
       thumbnailPeekView.frame.origin = NSPoint(x: round(posInWindow.x - thumbnailPeekView.frame.width / 2), y: yPos)
     } else {
       thumbnailPeekView.isHidden = true
+    }
+    if let panel = oscFloatingPanel, let previewPanel = oscPreviewPanel {
+      let previews = [timePreviewView!, thumbnailPeekView!].filter { !$0.isHidden }
+      let previewFrame = previews.reduce(NSRect.null) { $0.union($1.frame) }
+      var screenFrame = panel.convertToScreen(previewFrame)
+      if let visibleFrame = panel.screen?.visibleFrame {
+        screenFrame.origin.x = max(visibleFrame.minX, min(screenFrame.minX, visibleFrame.maxX - screenFrame.width))
+        screenFrame.origin.y = max(visibleFrame.minY, min(screenFrame.minY, visibleFrame.maxY - screenFrame.height))
+      }
+      previewPanel.setFrame(screenFrame, display: false)
+      previews.forEach { preview in
+        preview.setFrameOrigin(NSPoint(x: preview.frame.minX - previewFrame.minX,
+                                       y: preview.frame.minY - previewFrame.minY))
+      }
+      if previewPanel.parent == nil {
+        panel.addChildWindow(previewPanel, ordered: .above)
+      }
+      previewPanel.orderFront(nil)
     }
   }
 

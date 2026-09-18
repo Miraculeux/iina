@@ -81,6 +81,7 @@ class OSCFloatingView: TranslucentView {
   }
 
   func initPosition() {
+    guard mainWindow.oscFloatingPanel == nil else { return }
     let videoView = mainWindow.videoViewContainer!
     let cph = Preference.float(for: .controlBarPositionHorizontal)
     let cpv = Preference.float(for: .controlBarPositionVertical)
@@ -89,6 +90,7 @@ class OSCFloatingView: TranslucentView {
   }
 
   func updatePosition() {
+    guard mainWindow.oscFloatingPanel == nil else { return }
     let videoView = mainWindow.videoViewContainer!
     let windowWidth = videoView.frame.width
     let windowHeight = videoView.frame.height
@@ -128,16 +130,23 @@ class OSCFloatingView: TranslucentView {
   }
 
   override func mouseDown(with event: NSEvent) {
-    mousePosRelatedToView = NSEvent.mouseLocation
-    mousePosRelatedToView!.x -= frame.origin.x
-    mousePosRelatedToView!.y -= frame.origin.y
-    isAlignFeedbackSent = abs(frame.origin.x - (window!.frame.width - frame.width) / 2) <= 5
+    guard let window else { return }
+    mainWindow.hideFloatingOSCPreview()
+    let screenFrame = window.convertToScreen(convert(bounds, to: nil))
+    mousePosRelatedToView = CGPoint(x: NSEvent.mouseLocation.x - screenFrame.minX,
+                                  y: NSEvent.mouseLocation.y - screenFrame.minY)
+    isAlignFeedbackSent = abs(screenFrame.midX - videoFrameInScreen.midX) <= 5
     isDragging = true
+  }
+
+  private var videoFrameInScreen: NSRect {
+    let videoView = mainWindow.videoViewContainer!
+    return mainWindow.window!.convertToScreen(videoView.convert(videoView.bounds, to: nil))
   }
 
   override func mouseDragged(with event: NSEvent) {
     guard let mousePos = mousePosRelatedToView else { return }
-    let windowFrame = mainWindow.videoViewContainer.frame
+    let windowFrame = videoFrameInScreen
     let currentLocation = NSEvent.mouseLocation
     var newOrigin = CGPoint(
       x: currentLocation.x - mousePos.x,
@@ -145,7 +154,7 @@ class OSCFloatingView: TranslucentView {
     )
     // stick to center
     if Preference.bool(for: .controlBarStickToCenter) {
-      let xPosWhenCenter = (windowFrame.width - frame.width) / 2
+      let xPosWhenCenter = windowFrame.midX - frame.width / 2
       if abs(newOrigin.x - xPosWhenCenter) <= 5 {
         newOrigin.x = xPosWhenCenter
         if !isAlignFeedbackSent {
@@ -156,19 +165,25 @@ class OSCFloatingView: TranslucentView {
         isAlignFeedbackSent = false
       }
     }
-    // bound to window frame
-    let xMax = windowFrame.width - frame.width - 10
-    let yMax = windowFrame.height - frame.height - 25
-    newOrigin = newOrigin.constrained(to: NSRect(x: 10, y: 0, width: xMax, height: yMax))
-    // apply position
-    let newConstraint = newOrigin.x + frame.width / 2
+    if mainWindow.oscFloatingPanel == nil,
+       !windowFrame.contains(NSRect(origin: newOrigin, size: frame.size)) {
+      mainWindow.detachFloatingOSC()
+    }
+    if let panel = mainWindow.oscFloatingPanel {
+      panel.setFrameOrigin(newOrigin)
+      return
+    }
+    let newConstraint = newOrigin.x - windowFrame.minX + frame.width / 2
     xConstraint.constant = userInterfaceLayoutDirection == .rightToLeft ?
       windowFrame.width - newConstraint : newConstraint
-    yConstraint.constant = newOrigin.y
+    yConstraint.constant = newOrigin.y - windowFrame.minY
   }
 
   override func mouseUp(with event: NSEvent) {
     isDragging = false
+    mousePosRelatedToView = nil
+    mainWindow.updateTimer()
+    guard mainWindow.oscFloatingPanel == nil else { return }
     let windowFrame = mainWindow.videoViewContainer.frame
     // save final position
     Preference.set(xConstraint.constant / windowFrame.width, for: .controlBarPositionHorizontal)
