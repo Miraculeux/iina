@@ -89,6 +89,8 @@ class MainWindowController: PlayerWindowController {
   var oscPlayControlMiddleView: NSStackView!
   var leftArrowButton: NSButton!
   var rightArrowButton: NSButton!
+  private var previousChapterButton: NSButton!
+  private var nextChapterButton: NSButton!
   var oscSpeedLabelLeftContainer: NSView!
   var oscSpeedLabelRightContainer: NSView!
   var oscSpeedLabelLeft: NSTextField!
@@ -530,7 +532,18 @@ class MainWindowController: PlayerWindowController {
     self.rightArrowButton = NSButton(image: .speed, target: self, action: #selector(rightButtonAction))
     rightArrowButton.maxAcceleratorLevel = 5
 
-    [playButton, leftArrowButton, rightArrowButton].forEach { button in
+    self.previousChapterButton = NSButton(image: .sf("backward.end.fill")!, target: self,
+                                         action: #selector(previousChapterAction))
+    self.nextChapterButton = NSButton(image: .sf("forward.end.fill")!, target: self,
+                                     action: #selector(nextChapterAction))
+    previousChapterButton.toolTip = NSLocalizedString("iina.previous-chapter", tableName: "KeyBinding", comment: "")
+    nextChapterButton.toolTip = NSLocalizedString("iina.next-chapter", tableName: "KeyBinding", comment: "")
+    [previousChapterButton, nextChapterButton].forEach { button in
+      button!.refusesFirstResponder = true
+      button!.setAccessibilityLabel(button!.toolTip)
+    }
+
+    [playButton, leftArrowButton, rightArrowButton, previousChapterButton, nextChapterButton].forEach { button in
       button!.translatesAutoresizingMaskIntoConstraints = false
       button!.bezelStyle = .smallSquare
       button!.isBordered = false
@@ -556,7 +569,8 @@ class MainWindowController: PlayerWindowController {
     oscSpeedLabelRightContainer.addSubview(oscSpeedLabelRight)
     oscSpeedLabelRight.padding(.vertical, .leading(8))
 
-    self.oscPlayControlMiddleView = NSStackView(views: [leftArrowButton, playButton, rightArrowButton])
+    self.oscPlayControlMiddleView = NSStackView(views: [previousChapterButton, leftArrowButton,
+                             playButton, rightArrowButton, nextChapterButton])
     oscPlayControlMiddleView.translatesAutoresizingMaskIntoConstraints = false
     oscPlayControlMiddleView.orientation = .horizontal
     oscPlayControlMiddleView.alignment = .centerY
@@ -1036,6 +1050,8 @@ class MainWindowController: PlayerWindowController {
     let isSwitchingToTop = newPosition == .top
     let isSwitchingFromTop = oscPosition == .top
     let isFloating = newPosition == .floating
+    previousChapterButton.isHidden = !isFloating
+    nextChapterButton.isHidden = !isFloating
 
     // reset
     [oscFloatingView, oscBottomView].forEach { $0.isHidden = true }
@@ -3086,6 +3102,14 @@ class MainWindowController: PlayerWindowController {
     case .liveText:
       Preference.set(!Preference.bool(for: .enableLiveText), for: .enableLiveText)
     }
+  }
+
+  @objc private func previousChapterAction() {
+    player.navigateInChapters(nextChapter: false)
+  }
+
+  @objc private func nextChapterAction() {
+    player.navigateInChapters(nextChapter: true)
   }
 
   override func handleIINACommand(_ cmd: IINACommand) {

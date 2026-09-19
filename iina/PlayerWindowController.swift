@@ -714,6 +714,10 @@ class PlayerWindowController: NSWindowController, NSWindowDelegate {
 
   internal func handleIINACommand(_ cmd: IINACommand) {
     switch cmd {
+    case .previousChapter:
+      player.navigateInChapters(nextChapter: false)
+    case .nextChapter:
+      player.navigateInChapters(nextChapter: true)
     case .openFile:
       AppDelegate.shared.openFile(self)
     case .openURL:

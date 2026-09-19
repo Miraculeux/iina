@@ -46,6 +46,8 @@
 "iina.sub-panel" = "Subtitle panel";
 "iina.playlist-panel" = "Playlist panel";
 "iina.chapter-panel" = "Chapter panel";
+"iina.previous-chapter" = "Previous chapter";
+"iina.next-chapter" = "Next chapter";
 "iina.bigger-window" = "Bigger Window";
 "iina.smaller-window" = "Smaller Window";
 "iina.fit-to-screen" = "Fit to Screen";

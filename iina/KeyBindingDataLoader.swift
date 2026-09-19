@@ -47,6 +47,8 @@ class KeyBindingDataLoader {
     KBI("playlist-clear"),
     KBI("playlist-remove"),
     KBI("playlist-shuffle"),
+    KBI("previous-chapter", type: .iinaCmd),
+    KBI("next-chapter", type: .iinaCmd),
     KBI.separator(),
     KBI("video-panel", type: .iinaCmd),
     KBI("audio-panel", type: .iinaCmd),

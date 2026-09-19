@@ -1645,6 +1645,33 @@ class PlayerCore: NSObject {
     return chapter
   }
 
+  func navigateInChapters(nextChapter: Bool) {
+    guard !mainWindow.interactiveMode.isActive, info.state.active else { return }
+    let chapters = info.chapters
+    let position = mpv.getDouble(MPVProperty.timePos)
+    if let currentIndex = chapters.lastIndex(where: { $0.time.second <= position }) {
+      if !nextChapter, position - chapters[currentIndex].time.second > 120 {
+        playChapter(currentIndex)
+        return
+      }
+      let targetIndex = currentIndex + (nextChapter ? 1 : -1)
+      if chapters.indices.contains(targetIndex) {
+        playChapter(targetIndex)
+        return
+      }
+    } else if nextChapter, !chapters.isEmpty {
+      playChapter(0)
+      return
+    }
+    if !nextChapter, mpv.getInt(MPVProperty.playlistPos) == 0 {
+      mainWindow.videoView.displayActive()
+      seek(absoluteSecond: 0)
+      resume()
+    } else {
+      navigateInPlaylist(nextMedia: nextChapter)
+    }
+  }
+
   func setCrop(fromString str: String) {
     let vwidth = info.videoWidth!
     let vheight = info.videoHeight!

@@ -13,7 +13,7 @@ fileprivate extension LayoutValue {
 
 
 class OSCFloatingView: TranslucentView {
-  private let width: CGFloat = 460
+  private let width: CGFloat = 556
   weak var mainWindow: MainWindowController!
   private let prefObserver = Preference.Observer()
 
