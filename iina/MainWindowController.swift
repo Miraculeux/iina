@@ -89,8 +89,6 @@ class MainWindowController: PlayerWindowController {
   var oscPlayControlMiddleView: NSStackView!
   var leftArrowButton: NSButton!
   var rightArrowButton: NSButton!
-  private var previousChapterButton: NSButton!
-  private var nextChapterButton: NSButton!
   var oscSpeedLabelLeftContainer: NSView!
   var oscSpeedLabelRightContainer: NSView!
   var oscSpeedLabelLeft: NSTextField!
@@ -532,18 +530,7 @@ class MainWindowController: PlayerWindowController {
     self.rightArrowButton = NSButton(image: .speed, target: self, action: #selector(rightButtonAction))
     rightArrowButton.maxAcceleratorLevel = 5
 
-    self.previousChapterButton = NSButton(image: .sf("backward.end.fill")!, target: self,
-                                         action: #selector(previousChapterAction))
-    self.nextChapterButton = NSButton(image: .sf("forward.end.fill")!, target: self,
-                                     action: #selector(nextChapterAction))
-    previousChapterButton.toolTip = NSLocalizedString("iina.previous-chapter", tableName: "KeyBinding", comment: "")
-    nextChapterButton.toolTip = NSLocalizedString("iina.next-chapter", tableName: "KeyBinding", comment: "")
-    [previousChapterButton, nextChapterButton].forEach { button in
-      button!.refusesFirstResponder = true
-      button!.setAccessibilityLabel(button!.toolTip)
-    }
-
-    [playButton, leftArrowButton, rightArrowButton, previousChapterButton, nextChapterButton].forEach { button in
+    [playButton, leftArrowButton, rightArrowButton].forEach { button in
       button!.translatesAutoresizingMaskIntoConstraints = false
       button!.bezelStyle = .smallSquare
       button!.isBordered = false
@@ -569,8 +556,7 @@ class MainWindowController: PlayerWindowController {
     oscSpeedLabelRightContainer.addSubview(oscSpeedLabelRight)
     oscSpeedLabelRight.padding(.vertical, .leading(8))
 
-    self.oscPlayControlMiddleView = NSStackView(views: [previousChapterButton, leftArrowButton,
-                             playButton, rightArrowButton, nextChapterButton])
+    self.oscPlayControlMiddleView = NSStackView(views: [leftArrowButton, playButton, rightArrowButton])
     oscPlayControlMiddleView.translatesAutoresizingMaskIntoConstraints = false
     oscPlayControlMiddleView.orientation = .horizontal
     oscPlayControlMiddleView.alignment = .centerY
@@ -1050,8 +1036,6 @@ class MainWindowController: PlayerWindowController {
     let isSwitchingToTop = newPosition == .top
     let isSwitchingFromTop = oscPosition == .top
     let isFloating = newPosition == .floating
-    previousChapterButton.isHidden = !isFloating
-    nextChapterButton.isHidden = !isFloating
 
     // reset
     [oscFloatingView, oscBottomView].forEach { $0.isHidden = true }
@@ -1078,6 +1062,7 @@ class MainWindowController: PlayerWindowController {
     oscBottomView.updateVerticalConstraint(isDisplaying: newPosition == .bottom)
 
     oscPosition = newPosition
+    updateArrowButtons()
 
     // add fragment views
     switch oscPosition {
@@ -2897,6 +2882,23 @@ class MainWindowController: PlayerWindowController {
   /// [multiLevelAccelerator](https://developer.apple.com/documentation/appkit/nsbutton/buttontype/multilevelaccelerator)
   /// button. This allows the user to control the speed using pressure when using devices that support pressure sensitivity.
   func updateArrowButtons() {
+    if oscPosition == .floating {
+      leftArrowButton.image = .sf("backward.end.fill")
+      rightArrowButton.image = .sf("forward.end.fill")
+      leftArrowButton.toolTip = NSLocalizedString("iina.previous-chapter", tableName: "KeyBinding", comment: "")
+      rightArrowButton.toolTip = NSLocalizedString("iina.next-chapter", tableName: "KeyBinding", comment: "")
+      [leftArrowButton, rightArrowButton].forEach { button in
+        button!.setButtonType(.momentaryPushIn)
+        button!.refusesFirstResponder = true
+        button!.setAccessibilityLabel(button!.toolTip)
+      }
+      return
+    }
+    [leftArrowButton, rightArrowButton].forEach { button in
+      button!.toolTip = nil
+      button!.setAccessibilityLabel(nil)
+      button!.refusesFirstResponder = false
+    }
     if arrowBtnFunction == .playlist {
       leftArrowButton.image = #imageLiteral(resourceName: "nextl")
       rightArrowButton.image = #imageLiteral(resourceName: "nextr")
@@ -2948,6 +2950,10 @@ class MainWindowController: PlayerWindowController {
   /// button. This allows the user to control the speed using pressure when using devices that support pressure sensitivity.
   /// - Parameter sender: The button invoking this action.
   @IBAction func leftButtonAction(_ sender: NSButton) {
+    if oscPosition == .floating {
+      player.navigateInChapters(nextChapter: false)
+      return
+    }
     switch arrowBtnFunction {
     case .playlist, .seek:
       arrowButtonAction(left: true)
@@ -2991,6 +2997,10 @@ class MainWindowController: PlayerWindowController {
   /// button. This allows the user to control the speed using pressure when using devices that support pressure sensitivity.
   /// - Parameter sender: The button invoking this action.
   @IBAction func rightButtonAction(_ sender: NSButton) {
+    if oscPosition == .floating {
+      player.navigateInChapters(nextChapter: true)
+      return
+    }
     switch arrowBtnFunction {
     case .playlist, .seek:
       arrowButtonAction(left: false)
@@ -3102,14 +3112,6 @@ class MainWindowController: PlayerWindowController {
     case .liveText:
       Preference.set(!Preference.bool(for: .enableLiveText), for: .enableLiveText)
     }
-  }
-
-  @objc private func previousChapterAction() {
-    player.navigateInChapters(nextChapter: false)
-  }
-
-  @objc private func nextChapterAction() {
-    player.navigateInChapters(nextChapter: true)
   }
 
   override func handleIINACommand(_ cmd: IINACommand) {
