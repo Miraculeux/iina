@@ -17,10 +17,7 @@ class FileInfo: Hashable {
   var ext: String
   var nameInSeries: String?
   var characters: [Character]
-  var dist: [FileInfo: UInt] = [:]
-  var minDist: [FileInfo] = []
   var relatedSubs: [FileInfo] = []
-  var priorityStringOccurrences = 0
   var isMatched = false
 
   var prefix: String {  // prefix detected by FileGroup
@@ -47,6 +44,11 @@ class FileInfo: Hashable {
   }
 
   private func getNameInSeries() {
+    if let range = filename.range(of: "(?i)(?<![a-z0-9])s[0-9]+e[0-9]+(?:e[0-9]+)*(?![a-z0-9])",
+                                  options: .regularExpression) {
+      self.nameInSeries = String(filename[range]).lowercased()
+      return
+    }
     // e.g. "abc_" "ch01_xxx" -> "ch01"
     var firstDigit = false
     let name = suffix.unicodeScalars.prefix {
@@ -70,6 +72,70 @@ class FileInfo: Hashable {
   
   static func == (lhs: FileInfo, rhs: FileInfo) -> Bool {
     return lhs.path == rhs.path
+  }
+}
+
+enum SubtitleMatching {
+  private static let separators = CharacterSet(charactersIn: "._- ()[]")
+  private static let tokenSeparators = CharacterSet(charactersIn: ". ()[]+&")
+  private static let roles: Set<String> = ["forced", "sdh", "cc", "default"]
+  private static let languageCodes: Set<String> = {
+    if #available(macOS 13, *) {
+      return Set(Locale.LanguageCode.isoLanguageCodes.map(\.identifier))
+    } else {
+      return Set(Locale.isoLanguageCodes)
+    }
+  }()
+
+  static func matches(video: String, subtitle: String) -> Bool {
+    let video = video.precomposedStringWithCanonicalMapping.lowercased()
+    let subtitle = subtitle.precomposedStringWithCanonicalMapping.lowercased()
+    guard !video.isEmpty, subtitle.hasPrefix(video) else { return false }
+    let suffix = String(subtitle.dropFirst(video.count))
+    if suffix.isEmpty { return true }
+    guard let first = suffix.unicodeScalars.first, separators.contains(first) else { return false }
+    return suffixLanguages(suffix) != nil
+  }
+
+  static func languagePreference(for filename: String, languages: [String]) -> Int {
+    var subtitleLanguages: [String] = []
+    for index in filename.unicodeScalars.indices where separators.contains(filename.unicodeScalars[index]) {
+      if let suffix = suffixLanguages(String(filename[index...])) {
+        subtitleLanguages = suffix
+        break
+      }
+    }
+    return languages.firstIndex {
+      guard let language = languageCode($0.trimmingCharacters(in: .whitespaces)) else { return false }
+      return subtitleLanguages.contains { $0 == language || $0.hasPrefix(language + "-") }
+    } ?? languages.count
+  }
+
+  private static func suffixLanguages(_ suffix: String) -> [String]? {
+    let tokens = suffix.lowercased().trimmingCharacters(in: separators)
+      .components(separatedBy: tokenSeparators).filter { !$0.isEmpty }
+    guard !tokens.isEmpty else { return nil }
+    var languages: [String] = []
+    for token in tokens {
+      var parts = token.components(separatedBy: CharacterSet(charactersIn: "_-"))
+      while let last = parts.last, roles.contains(last) { parts.removeLast() }
+      if parts.isEmpty { continue }
+      guard let language = languageCode(parts.joined(separator: "-")) else { return nil }
+      languages.append(language)
+    }
+    return languages
+  }
+
+  private static func languageCode(_ token: String) -> String? {
+    let token = token.lowercased()
+    if token == "chs" { return "zh-hans" }
+    if token == "cht" { return "zh-hant" }
+    guard token.range(of: "^[a-z]{2,3}([_-][a-z]{4})?([_-]([a-z]{2}|[0-9]{3}))?$",
+                      options: .regularExpression) != nil else { return nil }
+    let canonical = Locale.canonicalLanguageIdentifier(from: token).lowercased()
+    guard let code = canonical.split(separator: "-").first,
+          languageCodes.contains(String(code)) else { return nil }
+    return canonical
   }
 }
 
@@ -181,4 +247,3 @@ class FileGroup {
   }
 
 }
-

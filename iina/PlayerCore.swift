@@ -1449,7 +1449,13 @@ class PlayerCore: NSObject {
     var track: MPVTrack?
     info.$subTracks.withLock { track = $0.first(where: { $0.externalFilename == url.mpvStr }) }
     if let track {
-      mpv.command(.subReload, args: [String(track.id)], checkError: false)
+      mpv.command(.subReload, args: [String(track.id)], checkError: false) { code in
+        if code < 0 {
+          self.log("Failed reloading subtitle: \(url.mpvStr), error code \(code)", level: .error)
+        } else {
+          self.setTrack(track.id, forType: .sub)
+        }
+      }
       return
     }
 
@@ -2143,19 +2149,18 @@ class PlayerCore: NSObject {
           try autoLoadFilesInCurrentFolder(ticket: currentTicket)
         }
         // auto load matched subtitles
-        if let matchedSubs = self.info.getMatchedSubs(path) {
+        let subAutoLoad: Preference.IINAAutoLoadAction = Preference.enum(for: .subAutoLoadIINA)
+        if subAutoLoad != .disabled, let matchedSubs = self.info.getMatchedSubs(path) {
           log("Found \(matchedSubs.count) subs for current file")
           var loadedSubs = Set<URL>()
-          for sub in matchedSubs {
+          // sub-add selects the loaded track. Load the preferred subtitle last.
+          for sub in matchedSubs.reversed() {
             // filter duplicated matched subtitles, see https://github.com/iina/iina/issues/5399
             guard !loadedSubs.contains(sub) else { continue }
             loadedSubs.insert(sub)
             try checkTicket(currentTicket)
             loadExternalSubFile(sub, suppressError: true)
           }
-          // set sub to the first one
-          try checkTicket(currentTicket)
-          setTrack(1, forType: .sub)
         }
         autoSearchOnlineSub()
       } catch TicketExpiredError.ticketExpired {
