@@ -228,7 +228,12 @@ class HistoryWindowController: NSWindowController, NSOutlineViewDelegate, NSOutl
   private func removeAllAfterConfirmation() {
     Utility.quickAskPanel("delete_all_history", sheetWindow: window) { respond in
       guard respond == .alertFirstButtonReturn else { return }
-      HistoryController.shared.removeAll()
+      HistoryController.shared.removeAll { result in
+        if case .failure(let error) = result {
+          Utility.showAlert("custom", arguments: [error.localizedDescription],
+                            style: .critical, sheetWindow: self.window)
+        }
+      }
     }
   }
 

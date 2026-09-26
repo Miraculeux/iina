@@ -183,7 +183,7 @@
 "preference.sub_override_level.descriptive_text.strip" = "从字幕中彻底去掉所有的ASS标签和样式。";
 "preference.sub_override_level.descriptive_text.yes" = "应用本节中的所有样式设置。";
 
-"preference.ytdl_plugin_not_installed" = "从 \"Plugins > 安装 GitHub\" 中安装在线媒体插件以享受高级功能，例如视频下载和自动yt-dlp 更新。";
+"preference.ytdl_plugin_not_installed" = "此版本不内置 yt-dlp。请自行安装并在下方设置其目录，或从“插件 > 从 GitHub 安装”安装 Online Media 插件来管理下载器。";
 "preference.ytdl_plugin_installed" = "由于安装了在线媒体插件，内置的 youtube-dl 支持已被禁用。";
 
 "menu.volume" = "音量: %@";
@@ -347,6 +347,11 @@
 "alert.restore_alerts.message" = "您确定要还原已忽略的警告吗？";
 
 "alert.cleared" = "已清空。";
+"menu.clear_all" = "全部清除…";
+"clear_all.description" = "清除已保存的播放进度、播放历史、最近打开记录和缩略图缓存。";
+"alert.clear_all.title" = "清除全部播放数据";
+"alert.clear_all.message" = "确定清除已保存的播放进度、播放历史、最近打开记录和缩略图缓存？不会删除媒体文件或当前播放列表。继续播放可能产生新的进度和缓存数据。";
+"alert.clear_all_failed" = "无法清除全部播放数据，部分数据可能已被清除。\n%@";
 "alert.restored" = "已还原";
 "alert.custom" = "%@";
 
@@ -1036,4 +1041,4 @@
 "settings.$sideOfTheScreen" = "侧";
 "settings.$toThe" = "距离屏幕";
 "settings.$top" = "顶";
-"settings.$ytdlWarning" = "The Online Media plugin has additional features such as switching quality and video downloading. IINA will use the plugin if it's installed and enabled. The settings below only work if the plugin is not available.";
+"settings.$ytdlWarning" = "此版本不内置 yt-dlp。请自行安装并在下方设置其目录，或安装 Online Media 插件来管理下载器。启用该插件后，IINA 会优先使用插件；下方设置仅在插件不可用时生效。";

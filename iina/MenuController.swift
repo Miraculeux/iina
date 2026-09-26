@@ -221,6 +221,8 @@ class MenuController: NSObject, NSMenuDelegate {
     // File menu
 
     fileMenu.delegate = self
+    fileMenu.items.first { $0.action == #selector(AppDelegate.clearAll(_:)) }?.title =
+      NSLocalizedString("menu.clear_all", comment: "Clear All")
 
     stringForOpen = open.title
     stringForOpenURL = openURL.title

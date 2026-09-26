@@ -35,21 +35,15 @@ class PrefUtilsViewController: PreferenceViewController, PreferenceWindowEmbedda
   @IBOutlet weak var setAsDefaultVideoCheckBox: NSButton!
   @IBOutlet weak var setAsDefaultAudioCheckBox: NSButton!
   @IBOutlet weak var setAsDefaultPlaylistCheckBox: NSButton!
-  @IBOutlet weak var thumbCacheSizeLabel: NSTextField!
-  @IBOutlet weak var savedPlaybackProgressClearedLabel: NSTextField!
-  @IBOutlet weak var playHistoryClearedLabel: NSTextField!
+  @IBOutlet weak var clearAllButton: NSButton!
+  @IBOutlet weak var clearAllDescription: NSTextField!
   @IBOutlet weak var restoreAlertsRestoredLabel: NSTextField!
 
   override func viewDidLoad() {
     super.viewDidLoad()
 
-    DispatchQueue.main.async {
-      self.updateThumbnailCacheStat()
-    }
-  }
-
-  private func updateThumbnailCacheStat() {
-    thumbCacheSizeLabel.stringValue = "\(FloatingPointByteCountFormatter.string(fromByteCount: CacheManager.shared.getCacheSize(), countStyle: .binary))B"
+    clearAllButton.title = NSLocalizedString("menu.clear_all", comment: "Clear All")
+    clearAllDescription.stringValue = NSLocalizedString("clear_all.description", comment: "Playback data to clear")
   }
 
   @IBAction func setIINAAsDefaultAction(_ sender: Any) {
@@ -129,32 +123,8 @@ class PrefUtilsViewController: PreferenceViewController, PreferenceWindowEmbedda
     }
   }
 
-  @IBAction func clearWatchLaterBtnAction(_ sender: Any) {
-    Utility.quickAskPanel("clear_watch_later", sheetWindow: view.window) { respond in
-      guard respond == .alertFirstButtonReturn else { return }
-      try? FileManager.default.removeItem(atPath: Utility.watchLaterURL.path)
-      Utility.createDirIfNotExist(url: Utility.watchLaterURL)
-      self.savedPlaybackProgressClearedLabel.isHidden = false
-    }
-  }
-
-  @IBAction func clearHistoryBtnAction(_ sender: Any) {
-    Utility.quickAskPanel("clear_history", sheetWindow: view.window) { respond in
-      guard respond == .alertFirstButtonReturn else { return }
-      try? FileManager.default.removeItem(atPath: Utility.playbackHistoryURL.path)
-      AppDelegate.shared.clearRecentDocuments(self)
-      Preference.set(nil, for: .iinaLastPlayedFilePath)
-      self.playHistoryClearedLabel.isHidden = false
-    }
-  }
-
-  @IBAction func clearCacheBtnAction(_ sender: Any) {
-    Utility.quickAskPanel("clear_cache", sheetWindow: view.window) { respond in
-      guard respond == .alertFirstButtonReturn else { return }
-      try? FileManager.default.removeItem(atPath: Utility.thumbnailCacheURL.path)
-      Utility.createDirIfNotExist(url: Utility.thumbnailCacheURL)
-      self.updateThumbnailCacheStat()
-    }
+  @IBAction func clearAllAction(_ sender: Any) {
+    AppDelegate.shared.clearAll(sender)
   }
 
   @IBAction func extChromeBtnAction(_ sender: Any) {

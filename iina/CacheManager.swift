@@ -33,6 +33,18 @@ class CacheManager {
     } ?? 0
   }
 
+  func clearPlaybackCaches() throws {
+    defer { needsRefresh = true }
+    for directory in [Utility.watchLaterURL, Utility.thumbnailCacheURL] {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      let contents = try FileManager.default.contentsOfDirectory(at: directory,
+                                                                 includingPropertiesForKeys: nil)
+      for url in contents {
+        try FileManager.default.removeItem(at: url)
+      }
+    }
+  }
+
   func clearOldCache() {
     guard !isJobRunning else { return }
     isJobRunning = true

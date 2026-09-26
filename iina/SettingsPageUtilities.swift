@@ -33,7 +33,6 @@ class SettingsPageUtilities: SettingsPage {
 
   private lazy var setAsDefaultSheet = SetAsDefaultSheetWindow()
   private lazy var browserExtensionView = BrowserExtensionView()
-  private lazy var thumbCacheSizeLabel: NSTextField = makeLabel()
 
   override func content() -> [SettingsSection] {
     return sections {
@@ -54,17 +53,10 @@ class SettingsPageUtilities: SettingsPage {
       }
       section {
         SettingsList(title: .text_ClearCache) {
-          SettingsItem.General(title: .text_ClearSavedPlaybackProgress)
-            .image(name: "clock")
-            .extraViews(actionButton(action: #selector(clearWatchLaterBtnAction), symbolName: ["trash"]))
-            .hasDescription(content: .text_DeleteAllWatchLater)
-          SettingsItem.General(title: .text_ClearPlaybackHistory)
-            .image(name: ["document.badge.clock", "doc.badge.clock", "doc"])
-            .extraViews(thumbCacheSizeLabel, actionButton(action: #selector(clearCacheBtnAction), symbolName: ["trash"]))
-            .hasDescription(content: .text_DeleteAllPlaybackHistories)
-          SettingsItem.General(title: .text_ClearThumbnailCache)
-            .image(name: "photo")
-            .extraViews(thumbCacheSizeLabel, actionButton(action: #selector(clearCacheBtnAction), symbolName: ["trash"]))
+          SettingsItem.General(title: .general("menu.clear_all"))
+            .image(name: "trash")
+            .extraViews(actionButton(action: #selector(clearAllAction), symbolName: ["trash"]))
+            .hasDescription(content: .general("clear_all.description"))
         }
       }
       section {
@@ -80,15 +72,6 @@ class SettingsPageUtilities: SettingsPage {
 
   private func actionButton(action: Selector, symbolName: [String] = []) -> NSButton {
     return NSButton(title: "", image: .sf(symbolName + ["arrow.right"])!, target: self, action: action)
-  }
-
-  private func updateThumbnailCacheStat() {
-    thumbCacheSizeLabel.stringValue = "\(FloatingPointByteCountFormatter.string(fromByteCount: CacheManager.shared.getCacheSize(), countStyle: .binary))B"
-  }
-
-  override init () {
-    super.init()
-    self.updateThumbnailCacheStat()
   }
 
   @objc func setIINAAsDefaultAction(_ sender: Any) {
@@ -109,46 +92,9 @@ class SettingsPageUtilities: SettingsPage {
     }
   }
 
-  @objc func clearWatchLaterBtnAction(_ sender: Any) {
-    guard let window = (sender as? NSView)?.window else { return }
-    Utility.quickAskPanel("clear_watch_later", sheetWindow: window) { respond in
-      guard respond == .alertFirstButtonReturn else { return }
-      do {
-        try FileManager.default.removeItem(atPath: Utility.watchLaterURL.path)
-        Utility.createDirIfNotExist(url: Utility.watchLaterURL)
-        Utility.showAlert("cleared", style: .informational, sheetWindow: window)
-      } catch {
-        Utility.showAlert("custom", arguments: ["\(error)"], style: .critical, sheetWindow: window)
-      }
-    }
+  @objc func clearAllAction(_ sender: Any) {
+    AppDelegate.shared.clearAll(sender)
   }
-
-  @objc func clearHistoryBtnAction(_ sender: Any) {
-    guard let window = (sender as? NSView)?.window else { return }
-    Utility.quickAskPanel("clear_history", sheetWindow: window) { respond in
-      guard respond == .alertFirstButtonReturn else { return }
-      try? FileManager.default.removeItem(atPath: Utility.playbackHistoryURL.path)
-      AppDelegate.shared.clearRecentDocuments(self)
-      Preference.set(nil, for: .iinaLastPlayedFilePath)
-      Utility.showAlert("cleared", style: .informational, sheetWindow: window)
-    }
-  }
-
-  @objc func clearCacheBtnAction(_ sender: Any) {
-    guard let window = (sender as? NSView)?.window else { return }
-    Utility.quickAskPanel("clear_cache", sheetWindow: window) { respond in
-      guard respond == .alertFirstButtonReturn else { return }
-      ThumbnailCache.clearThumbnailCache()
-      self.updateThumbnailCacheStat()
-    }
-  }
-}
-
-fileprivate func makeLabel() -> NSTextField {
-  let tf = NSTextField(labelWithString: "")
-  tf.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
-  tf.textColor = .secondaryLabelColor
-  return tf
 }
 
 fileprivate class SetAsDefaultSheetWindow: NSWindow {

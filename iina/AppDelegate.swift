@@ -1014,6 +1014,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     historyWindow.showWindow(self)
   }
 
+  @IBAction func clearAll(_ sender: Any) {
+    let window = (sender as? NSView)?.window ?? NSApp.keyWindow
+    let clear = {
+      HistoryController.shared.removeAll { result in
+        do {
+          try result.get()
+          try CacheManager.shared.clearPlaybackCaches()
+          self.clearRecentDocuments(sender)
+          Preference.set(nil, for: .iinaLastPlayedFilePath)
+          Preference.set(nil, for: .iinaLastPlayedFilePosition)
+          for player in PlayerCore.playerCores where player.initialWindow.loaded {
+            player.initialWindow.reloadData()
+          }
+          Utility.showAlert("cleared", style: .informational, sheetWindow: window)
+        } catch {
+          Logger.log("Clear All failed: \(error)", level: .error)
+          Utility.showAlert("clear_all_failed", arguments: [error.localizedDescription],
+                            style: .critical, sheetWindow: window)
+        }
+      }
+    }
+    if let window {
+      Utility.quickAskPanel("clear_all", sheetWindow: window) { response in
+        if response == .alertFirstButtonReturn { clear() }
+      }
+    } else if Utility.quickAskPanel("clear_all") {
+      clear()
+    }
+  }
+
   @IBAction func showLogWindow(_ sender: AnyObject) {
     logWindow.showWindow(self)
   }

@@ -130,12 +130,31 @@ class HistoryController: NSObject {
     save()
   }
 
-  func removeAll() {
-    $history.withLock { history in
-      log("Removing all playback history entries")
-      history = []
+  func removeAll(completion: ((Result<Void, Error>) -> Void)? = nil) {
+    $tasksOutstanding.withLock { $0 += 1 }
+    // Clear after pending additions so they cannot restore the old history.
+    queue.async { [self] in
+      let result = Result<Void, Error> {
+        try $history.withLock { history in
+          log("Removing all playback history entries")
+          let data = try NSKeyedArchiver.archivedData(withRootObject: [PlaybackHistory](),
+                                                     requiringSecureCoding: true)
+          try data.write(to: plistURL, options: [.atomic])
+          history = []
+        }
+      }
+      if case .failure(let error) = result {
+        log("Failed to clear playback history: \(error)", level: .error)
+      }
+      $tasksOutstanding.withLock { $0 -= 1 }
+      DispatchQueue.main.async {
+        if case .success = result {
+          NotificationCenter.default.post(Notification(name: .iinaHistoryUpdated))
+        }
+        completion?(result)
+        NotificationCenter.default.post(Notification(name: .iinaHistoryTaskFinished))
+      }
     }
-    save()
   }
 
   private func log(_ message: @autoclosure () -> String, level: Logger.Level = .debug) {

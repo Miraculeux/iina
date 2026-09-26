@@ -31,7 +31,67 @@
 * Command line tool and browser extensions provided
 * In active development
 
+## Features in this fork
+
+[Miraculeux/iina](https://github.com/Miraculeux/iina) builds on upstream IINA with
+the following playback, subtitle, and packaging changes.
+
+### Detachable floating playback controls
+
+Drag the floating on-screen controller (OSC) beyond the video area to position
+it outside the player window. The detached controls retain auto-hide behavior,
+hover time/thumbnail previews, and their position above the associated player
+window.
+
+### Chapter-aware navigation
+
+The floating OSC reuses its left/right arrow buttons for previous/next chapter
+navigation, keeping the compact three-button layout. Top and bottom docked
+controls retain their configured arrow-button behavior.
+
+* **Command+Shift+Left / Right** invokes previous/next chapter navigation in the
+  default IINA key-binding preset. These commands can be reassigned in settings.
+* Going backward **more than two minutes into a chapter** restarts that chapter;
+  otherwise it goes to the previous chapter.
+* At chapter boundaries, or when no chapters are available, navigation falls
+  back to the previous/next playlist item. Going backward from the first playlist
+  item restarts that file.
+
+### More precise external subtitle matching
+
+* Recognizes language-tagged filenames such as `Movie.zh.srt`,
+  `Movie.zh-Hans.srt`, and `Movie.en.sdh.srt`, including common Chinese language
+  aliases and forced/SDH/CC subtitle tags.
+* Preserves season and episode identity and avoids unrelated-file fuzzy
+  fallbacks and arbitrary title-substring matches.
+* Respects language preferences, subtitle priority strings, and disabled
+  auto-loading. Selects the preferred matched external subtitle instead of
+  blindly selecting subtitle track 1.
+
+### Lean default installation
+
+This build bundles only the OpenSubtitles plugin. User Scripts and Online Media
+remain available in the plugin manager but are not installed by default. Existing
+user-installed plugins are not removed when upgrading.
+
+yt-dlp is not downloaded or bundled. To play website URLs that require extraction,
+install yt-dlp separately and set its directory in Settings > Network, or install
+the Online Media plugin and configure its downloader. Local files and direct
+media URLs do not require yt-dlp.
+
+### Clearing playback data
+
+Use **File > Clear All...** (**Command+Shift+K**) or **Settings > Utilities >
+Clear Cache > Clear All...** in either the new or legacy settings interface.
+After confirmation, this clears saved playback progress, playback history,
+Open Recent entries, and thumbnail cache files.
+It does not delete media files, plugins, preferences, or the current playlist.
+Continued playback can generate new progress and cache data.
+
 ## Downloading
+
+The links below provide **upstream IINA builds**, not builds of this fork. To use
+the fork-specific features above, [build this repository](#building).
 
 You can get IINA through several sources. For the latest stable and beta releases, visit the [GitHub release page](https://github.com/iina/iina/releases) or the [IINA official website](https://iina.io/). If you want to try out the latest features and improvements before they are officially released, you can download the nightly builds from our [Nightly Download Page](https://iina.io/nightly/).
 
@@ -59,28 +119,36 @@ IINA uses mpv for media playback. To build IINA, you can either fetch copies of 
 
 3. Build the project.
 
+See [Lean default installation](#lean-default-installation) for bundled components.
+The former `--yt-dlp-src` download option is no longer supported.
+
 ### Building mpv manually
 
 1. Build your own copy of mpv. You can use our [official build scripts](https://github.com/iina/deps-buildscripts) to build mpv and all other dependencies.
 
 2. Run `other/parse_doc.rb`. This script will fetch the latest mpv documentation and generate `MPVOption.swift`, `MPVCommand.swift` and `MPVProperty.swift`. Copy them from `other/` to `iina/`, replacing the current files. This is only needed when updating libmpv. Note that if the API changes, the player source code may also need to be changed.
 
-3. Link the *yt-dlp* dependency to deps/executable
+3. Open `iina.xcodeproj` in the [latest public version of Xcode](https://apps.apple.com/app/xcode/id497799835). *IINA may not build if you use any other version.*
 
-   ```console
-   mkdir -p deps/executable
-   ln -s $(which yt-dlp) deps/executable/youtube-dl
-   ```
+4. Remove all references to `.dylib` files from the Frameworks group in the sidebar and add all the `.dylib` files in `deps/lib` to that group by clicking  "Add Files to iina..." in the context menu.
 
-4. Open `iina.xcodeproj` in the [latest public version of Xcode](https://apps.apple.com/app/xcode/id497799835). *IINA may not build if you use any other version.*
+5. Add all the imported `.dylib` files into the "Copy Dylibs" phase under "Build Phases" tab of the iina target.
 
-5. Remove all references to `.dylib` files from the Frameworks group in the sidebar and add all the `.dylib` files in `deps/lib` to that group by clicking  "Add Files to iina..." in the context menu.
+6. Make sure the necessary `.dylib` files are present in the "Link Binary With Libraries" phase under "Build Phases". Xcode should have already added all dylibs under this section.
 
-6. Add all the imported `.dylib` files into the "Copy Dylibs" phase under "Build Phases" tab of the iina target.
+7. Build the project.
 
-7. Make sure the necessary `.dylib` files are present in the "Link Binary With Libraries" phase under "Build Phases". Xcode should have already added all dylibs under this section.
+### Regression checks
 
-8. Build the project.
+Run the focused subtitle-matching and playback-data/packaging checks:
+
+```console
+bash other/tests/run-subtitle-matching-tests.sh
+bash other/tests/run-playback-data-tests.sh
+```
+
+These use temporary fixtures and test doubles, not the current user's playback
+data. They do not replace end-to-end playback or native UI testing.
 
 ## Contributing
 

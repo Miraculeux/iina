@@ -129,6 +129,12 @@
                                     <action selector="showHistoryWindow:" target="Voe-Tx-rLC" id="yVv-sR-1DQ"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Clear All…" keyEquivalent="K" id="cAL-lA-001">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="clearAll:" target="Voe-Tx-rLC" id="cAL-lA-002"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="N0Z-h7-JSg"/>
                             <menuItem title="Show Current File in Finder" id="che-dy-QUU">
                                 <modifierMask key="keyEquivalentModifierMask"/>
