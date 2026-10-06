@@ -1524,6 +1524,8 @@ class MainWindowController: PlayerWindowController {
     // stop playing
     if case .fullscreen(legacy: true, priorWindowedFrame: _) = fsState {
       restoreDockSettings()
+      cameraHousingWindow?.orderOut(self)
+      cameraHousingWindow = nil
     }
     player.stop()
     // stop tracking mouse event
@@ -2673,7 +2675,7 @@ class MainWindowController: PlayerWindowController {
       log("Constrained window frame to be in screen: \(rect)")
     }
 
-    if player.info.justOpenedFile && !Preference.bool(for: .edgeToEdgeVideo) {
+    if player.info.justOpenedFile && !Preference.bool(for: .edgeToEdgeVideo) && Preference.bool(for: .dockedControlBarAndTitlebar) {
       rect.size.height += titleBarView.frame.height
     }
 
@@ -3147,7 +3149,7 @@ class MainWindowController: PlayerWindowController {
     }
 
     let mouseXPos = playSlider.convert(posInWindow, from: nil).x
-    let percentage = max(0, Double((mouseXPos - 3) / (playSlider.bounds.width - 6)))
+    let percentage = Double((mouseXPos - 3) / (playSlider.bounds.width - 6)).clamped(to: (0...1))
 
     timePreviewView.isHidden = false
     let previewTime = duration * percentage
