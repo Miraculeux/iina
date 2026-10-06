@@ -11,8 +11,8 @@
 # Running this script generates an IINA DMG file in Xcode's build directory.
 # Before running this script you must in Xcode edit the iina scheme and set the
 # build configuration to the desired type of IINA release (Beta, Debug, Nightly or
-# Release) and then build an IINA.app that can be run on any Mac. This script will
-# refuse to generate a DMG if the app is not universal. This script also tests
+# Release) and then build an IINA.app for Apple Silicon (arm64). This script will
+# refuse to generate a DMG if the app is not arm64-only. This script also tests
 # that the Safari extension can be installed and uninstalled.
 
 # IMPORTANT! This script requires that create-dmg has been installed.
@@ -147,14 +147,10 @@ if [ ! -e "$APP_PATH" ]; then
 fi
 echo -e "${GREEN}Found IINA.app: ${APP_PATH}${NC}"
 
-# Confirm app was built for all Macs.
-IINA_BINARY_PATH="${APP_PATH}/Contents/MacOS/iina"
-if ! lipo "$IINA_BINARY_PATH" -verify_arch arm64; then
-  echo -e "${RED}IINA.app is missing support for arm64.${NC}" >&2
-  exit 1
-fi
-if ! lipo "$IINA_BINARY_PATH" -verify_arch x86_64; then
-  echo -e "${RED}IINA.app is missing support for x86_64.${NC}" >&2
+# Confirm app was built only for Apple Silicon.
+IINA_BINARY_PATH="${APP_PATH}/Contents/MacOS/IINA"
+if [[ "$(lipo "$IINA_BINARY_PATH" -archs)" != "arm64" ]]; then
+  echo -e "${RED}IINA.app must be built for arm64 only (Apple Silicon).${NC}" >&2
   exit 1
 fi
 

@@ -128,6 +128,9 @@ You can get IINA through several sources. For the latest stable and beta release
 
 ## Building
 
+This fork supports **Apple Silicon (arm64) only**. Intel (x86_64) and universal
+builds are not supported. All Xcode build configurations target arm64.
+
 IINA uses mpv for media playback. To build IINA, you can either fetch copies of these libraries we have already built (using the instructions below) or build them yourself by skipping to [these instructions](#building-mpv-manually).
 
 ### Using the pre-compiled libraries
@@ -135,24 +138,34 @@ IINA uses mpv for media playback. To build IINA, you can either fetch copies of 
 1. Download pre-compiled libraries by running
 
 ```console
-./other/download_libs.sh
+./other/download_libs.sh --arch arm64
 ```
 
 > [!TIP]
-> - By default the shell script downloads universal binaries. You can download arch-specific binaries using `--arch <ARCH>` (`universal`, `arm64` or `x86_64`)
+> - The shell script defaults to arm64 libraries and rejects other architectures.
 > - Files are downloaded in parallel (5 concurrent downloads by default). You can change this using `--parallel <N>` (from 1 to...)
-> - If you want to build an older IINA version you must change `DYLIBS_DOWNLOAD_PATH` in the script to download the corresponding dylibs. For example, `https://iina.io/dylibs/1.2.0/universal/fileList.txt`.
+> - If you want to build an older IINA version you must change `DYLIBS_DOWNLOAD_PATH` in the script to download the corresponding arm64 dylibs.
 
 2. Open iina.xcodeproj in the [latest public version of Xcode](https://apps.apple.com/app/xcode/id497799835). *IINA may not build if you use any other version.*
 
 3. Build the project.
+
+For a Release build from the command line:
+
+```console
+xcodebuild -project iina.xcodeproj -scheme iina -configuration Release -derivedDataPath build
+```
+
+The app is produced at `build/Build/Products/Release/IINA.app`. For installation
+in `/Applications`, choose an Apple-issued signing identity as described in
+[Local network playback on macOS](#local-network-playback-on-macos).
 
 See [Lean default installation](#lean-default-installation) for bundled components.
 The former `--yt-dlp-src` download option is no longer supported.
 
 ### Building mpv manually
 
-1. Build your own copy of mpv. You can use our [official build scripts](https://github.com/iina/deps-buildscripts) to build mpv and all other dependencies.
+1. Build your own arm64 copy of mpv and all other dependencies. You can use our [official build scripts](https://github.com/iina/deps-buildscripts).
 
 2. Run `other/parse_doc.rb`. This script will fetch the latest mpv documentation and generate `MPVOption.swift`, `MPVCommand.swift` and `MPVProperty.swift`. Copy them from `other/` to `iina/`, replacing the current files. This is only needed when updating libmpv. Note that if the API changes, the player source code may also need to be changed.
 

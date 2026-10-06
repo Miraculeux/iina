@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# universal | arm64 | x86_64
-ARCH="universal"
+ARCH="arm64"
 PARALLEL_DOWNLOADS=5
 SKIP_PLUGINS=false
 
@@ -18,7 +17,7 @@ printUsageHelp() {
   echo
   echo -e "${BLUE}Usage:${NC}"
   echo -e "    ${GREEN}$0 [-h|--help]:${NC}           Displays this help message"
-  echo -e "    ${GREEN}$0 [--arch] <ARCH>:${NC}       Architecture to download dylibs for: universal | arm64 | x86_64"
+  echo -e "    ${GREEN}$0 [--arch] <ARCH>:${NC}       Architecture to download dylibs for: arm64 (default; Apple Silicon only)"
   echo -e "    ${GREEN}$0 [--parallel] <N>:${NC}      Number of parallel downloads (default: 5)"
   echo -e "    ${GREEN}$0 [--skip-plugins]:${NC}      Skip downloading OpenSubtitles"
   echo
@@ -106,11 +105,11 @@ if [[ $# -gt 0 ]]; then
 fi
 
 case $ARCH in
-universal | arm64 | x86_64)
+arm64)
   DYLIBS_DOWNLOAD_PATH="https://iina.io/dylibs/${ARCH}"
   ;;
 *)
-  echo -e "${RED}Invalid architecture: $ARCH${NC}"
+  echo -e "${RED}Unsupported architecture: $ARCH. This fork supports only arm64 (Apple Silicon).${NC}" >&2
   printUsageHelp
   exit 1
   ;;
