@@ -213,6 +213,8 @@ class PlayerCore: NSObject {
   var mpv: MPVController!
 
   var receivedEndFileWhileLoading: Bool = false
+  private var playlistStartupFallback = PlaylistStartupFallback()
+  private var playlistStartupTimeout: DispatchWorkItem?
 
   var plugins: [JavascriptPluginInstance] = []
   private var pluginMap: [String: JavascriptPluginInstance] = [:]
@@ -395,6 +397,7 @@ class PlayerCore: NSObject {
       log("empty file path or url", level: .error)
       return
     }
+    cancelPlaylistStartupFallback()
     guard info.state != .stopping else {
       // The mpv core is currently processing an asynchronous stop command. To avoid the complexity
       // of coordinating two mpv commands executing at the same time, wait until the stop command
@@ -531,6 +534,8 @@ class PlayerCore: NSObject {
   ///   - isNetwork: Whether the media must be streamed over the network.
   private func openMainWindow(path: String, url: URL, isNetwork: Bool) {
     log("Opening \(path) in main window")
+    cancelPlaylistStartupFallback()
+    playlistStartupFallback.begin(url: url)
     info.currentURL = url
     info.mpvMd5 = Utility.mpvWatchLaterMd5(url, ignorePathInWatchLaterConfig)
     info.isNetworkResource = isNetwork
@@ -706,6 +711,7 @@ class PlayerCore: NSObject {
   ///     task is still running this method only changes the player state. When the background task ends it will notice that shutting
   ///     down was in progress and will call this method again to continue the process of shutting down..
   func shutdown() {
+    cancelPlaylistStartupFallback()
     info.state = .shuttingDown
     guard !backgroundTaskInUse else { return }
     log("Shutting down")
@@ -732,6 +738,7 @@ class PlayerCore: NSObject {
   ///     windows of vulnerability that can not be fully closed. IINA has no choice but to support a mpv initiated shutdown as best it
   ///     can.
   func mpvHasShutdown() {
+    cancelPlaylistStartupFallback()
     let isMPVInitiated = info.state != .shuttingDown
     let suffix = isMPVInitiated ? " (initiated by mpv)" : ""
     log("Player has shutdown\(suffix)")
@@ -945,6 +952,7 @@ class PlayerCore: NSObject {
   ///     and call this method again to continue the process of stopping. It is important to stop the background task as if it is still
   ///     running when the mpv core is shutdown it may call into mpv triggering a crash.
   func stop() {
+    cancelPlaylistStartupFallback()
     guard info.state != .shutDown else { return }
     savePlaybackPosition()
 
@@ -2099,9 +2107,10 @@ class PlayerCore: NSObject {
   /// was received.
   /// - Important: The event may be received after IINA has started to stop and shutdown the core. The event must be ignored if
   ///         the player is no longer active.
-  func fileStarted(path: String) {
+  func fileStarted(path: String, playlistEntryID: Int64) {
     guard info.state.active else { return }
     log("File started")
+    watchPlaylistStartup(path: path, entryID: playlistEntryID)
 
     Task { @MainActor in
       mainWindow.liveText.clearAnalysis()
@@ -2275,7 +2284,12 @@ class PlayerCore: NSObject {
     }
   }
 
-  func fileEnded(_ dueToStopCommand: Bool) {
+  func fileEnded(_ dueToStopCommand: Bool, playlistEntryID: Int64,
+                 failed: Bool, insertedEntries: Int) {
+    if insertedEntries > 0 {
+      playlistStartupTimeout?.cancel()
+      playlistStartupFallback.playlistExpanded(entryID: playlistEntryID, count: insertedEntries)
+    }
     // if receive end-file when loading file, might be error
     // wait for idle
     if info.state == .loading || info.state == .starting {
@@ -2286,6 +2300,94 @@ class PlayerCore: NSObject {
       info.shouldAutoLoadFiles = false
     }
     MemoryUsage.shared.logUsage("after file ended")
+    if failed, playlistStartupFallback.isActive {
+      log("M3U startup entry \(playlistEntryID) failed; trying another entry", level: .warning)
+      playlistStartupFallback.fileFailed(entryID: playlistEntryID)
+    }
+  }
+
+  private func cancelPlaylistStartupFallback() {
+    playlistStartupTimeout?.cancel()
+    playlistStartupTimeout = nil
+    playlistStartupFallback.cancel()
+  }
+
+  private func playlistStartupEntries() -> [PlaylistStartupFallback.Entry]? {
+    guard let playlist = mpv.getNode(MPVProperty.playlist) as? [[String: Any]] else {
+      log("Cannot read playlist for M3U startup fallback", level: .error)
+      return nil
+    }
+    var entries: [PlaylistStartupFallback.Entry] = []
+    for item in playlist {
+      guard let id = item["id"] as? Int64 else {
+        log("Missing playlist entry ID during M3U startup fallback", level: .error)
+        return nil
+      }
+      entries.append(.init(id: id, isPlaying: item["playing"] as? Bool == true))
+    }
+    return entries
+  }
+
+  private func watchPlaylistStartup(path: String, entryID: Int64) {
+    playlistStartupTimeout?.cancel()
+    guard let delay = playlistStartupFallback.fileStarted(path: path, entryID: entryID,
+                                                         now: ProcessInfo.processInfo.systemUptime) else { return }
+    let timeout = DispatchWorkItem { [weak self] in
+      guard let self, self.playlistStartupFallback.isActive, self.info.state.active else { return }
+      guard let entries = self.playlistStartupEntries() else {
+        self.failPlaylistStartup()
+        return
+      }
+      guard entries.contains(where: { $0.id == entryID && $0.isPlaying }) else { return }
+      if self.mpv.readyPlaylistEntryID == entryID {
+        self.cancelPlaylistStartupFallback()
+        return
+      }
+      guard self.playlistStartupFallback.timedOut(entryID: entryID,
+                                                 now: ProcessInfo.processInfo.systemUptime) else { return }
+      self.log("M3U startup entry \(entryID) exceeded the 10-second loading limit; skipping",
+               level: .warning)
+      self.advancePlaylistStartup(after: entryID)
+    }
+    playlistStartupTimeout = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: timeout)
+  }
+
+  private func advancePlaylistStartup(after entryID: Int64) {
+    guard playlistStartupFallback.isActive else { return }
+    guard let entries = playlistStartupEntries() else {
+      failPlaylistStartup()
+      return
+    }
+    switch playlistStartupFallback.nextAction(entries: entries, after: entryID) {
+    case .wait:
+      break
+    case .play(let index):
+      playlistStartupTimeout?.cancel()
+      log("Trying M3U startup entry at index \(index)")
+      mpv.command(.playlistPlayIndex, args: [String(index)], checkError: false) { status in
+        if status < 0 {
+          self.log("Cannot advance M3U playlist: \(String(cString: mpv_error_string(status)))", level: .error)
+          self.failPlaylistStartup()
+        }
+      }
+    case .exhausted:
+      failPlaylistStartup()
+    }
+  }
+
+  private func failPlaylistStartup() {
+    log("M3U startup failed: no remaining playable entries", level: .error)
+    cancelPlaylistStartupFallback()
+    receivedEndFileWhileLoading = false
+    mainWindow.pendingShow = false
+    miniPlayer.pendingShow = false
+    stop()
+    if AppDelegate.shared.openURLWindow.window?.isVisible == true {
+      AppDelegate.shared.openURLWindow.failedToLoadURL()
+    } else {
+      Utility.showAlert("error_open")
+    }
   }
 
   func afChanged() {
@@ -2367,6 +2469,16 @@ class PlayerCore: NSObject {
   }
 
   func idleActiveChanged() {
+    if playlistStartupFallback.isActive {
+      // Ignore an idle event queued before a fallback command restarted loading.
+      guard mpv.getFlag(MPVProperty.idleActive) else { return }
+      if let entryID = playlistStartupFallback.lastFailedEntryID {
+        advancePlaylistStartup(after: entryID)
+        if playlistStartupFallback.isActive { return }
+      } else {
+        cancelPlaylistStartupFallback()
+      }
+    }
     if receivedEndFileWhileLoading && info.state == .starting {
       DispatchQueue.main.async { [unowned self] in
         currentController.close()
@@ -2446,6 +2558,7 @@ class PlayerCore: NSObject {
 
   func playbackRestarted() {
     log("Playback restarted")
+    cancelPlaylistStartupFallback()
 
     // Important to synchronize the time as mpv may slightly alter the playback position during a
     // restart even while paused. See issue #5337.

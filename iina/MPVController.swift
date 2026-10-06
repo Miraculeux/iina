@@ -92,6 +92,9 @@ class MPVController: NSObject {
   // The mpv_handle
   var mpv: OpaquePointer!
   var mpvRenderContext: OpaquePointer?
+  private var startingPlaylistEntryID: Int64?
+  // Read by the startup timeout before the main-thread playback-restart callback runs.
+  @Atomic private(set) var readyPlaylistEntryID: Int64?
 
   private var openGLContext: CGLContextObj! = nil
 
@@ -1137,10 +1140,13 @@ class MPVController: NSObject {
       DispatchQueue.main.async { self.player.onVideoReconfig() }
 
     case MPV_EVENT_START_FILE:
+      let start = event.pointee.data.load(as: mpv_event_start_file.self)
+      startingPlaylistEntryID = start.playlist_entry_id
+      readyPlaylistEntryID = nil
       guard let path = getString(MPVProperty.path) else { break }
       DispatchQueue.main.async { [self] in
         player.info.state = .starting
-        player.fileStarted(path: path)
+        player.fileStarted(path: path, playlistEntryID: start.playlist_entry_id)
         let url = player.info.currentURL
         let message = player.info.isNetworkResource ? url?.absoluteString : url?.lastPathComponent
         player.sendOSD(.fileStart(message ?? "-"))
@@ -1167,6 +1173,7 @@ class MPVController: NSObject {
       }
 
     case MPV_EVENT_PLAYBACK_RESTART:
+      readyPlaylistEntryID = startingPlaylistEntryID
       DispatchQueue.main.async { [self] in
         player.info.isSeeking = false
         // When playback is paused the display link may be shutdown in order to not waste energy.
@@ -1184,7 +1191,8 @@ class MPVController: NSObject {
       }
 
     case MPV_EVENT_END_FILE:
-      let reason = event.pointee.data.load(as: mpv_end_file_reason.self)
+      let end = event.pointee.data.load(as: mpv_event_end_file.self)
+      let reason = end.reason
       let dueToStopCommand = reason == MPV_END_FILE_REASON_STOP
       // When the IINA "Pause" setting is enabled under "When media is opened" IINA must tell mpv to
       // pause playback ASAP. Events are delivered asynchronously. If the IINA
@@ -1201,7 +1209,12 @@ class MPVController: NSObject {
         // condition, playback must be paused as soon as possible, so logging is done afterward.
         log("Pausing playback because \"pause when media is opened\" is enabled")
       }
-      DispatchQueue.main.async { self.player.fileEnded(dueToStopCommand) }
+      DispatchQueue.main.async {
+        self.player.fileEnded(dueToStopCommand, playlistEntryID: end.playlist_entry_id,
+                              failed: reason == MPV_END_FILE_REASON_ERROR,
+                              insertedEntries: end.playlist_insert_num_entries > 0
+                                ? Int(end.playlist_insert_num_entries) : 0)
+      }
 
     case MPV_EVENT_COMMAND_REPLY:
       let reply = event.pointee.reply_userdata

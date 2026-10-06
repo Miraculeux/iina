@@ -1,1 +1,2 @@
 NSHumanReadableCopyright = "Collider LI 版權所有 © 2017-2025。";
+NSLocalNetworkUsageDescription = "IINA 需要存取本機網路，以播放 IPTV 伺服器及區域網路內其他裝置上的媒體。";

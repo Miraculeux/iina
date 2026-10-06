@@ -1,1 +1,2 @@
 NSHumanReadableCopyright = "Copyright © 2017-2026\nCollider LI, et al.\nReleased under GPLv3.";
+NSLocalNetworkUsageDescription = "IINA needs local network access to play media from IPTV servers and other devices on your network.";

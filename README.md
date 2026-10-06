@@ -88,6 +88,34 @@ Open Recent entries, and thumbnail cache files.
 It does not delete media files, plugins, preferences, or the current playlist.
 Continued playback can generate new progress and cache data.
 
+### M3U startup fallback
+
+When opening an M3U/M3U8 channel playlist, playback still resumes at the saved
+entry. Until the first item is ready for playback, failed entries are skipped and
+each startup entry has a 10-second limit. At the end of the list, startup can
+continue from the beginning; failed entries are not retried. If no entries can
+be loaded, IINA stops and reports the failure.
+
+This fallback ends when playback is ready (including when opened paused), or when
+playback is stopped, closed, replaced, or the app quits. Ordinary media and M3U8 HLS streams that do
+not expand into a channel playlist retain their existing behavior.
+
+### Local network playback on macOS
+
+On macOS 15 and later, allow IINA in **System Settings > Privacy & Security >
+Local Network** to play IPTV and other media hosted on your LAN. The app declares
+this usage with a localized permission description.
+
+For installed development builds, use an Apple-issued code-signing identity in
+Xcode rather than an unsigned or ad hoc signed bundle. macOS uses the app's code
+signature to track its network permission; replacing an unsigned build can make
+an existing permission entry unreliable. See Apple's
+[local network privacy guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+
+Verify LAN playback by launching the installed app from Finder or the Dock.
+Launching the executable directly from Terminal is not a permission test:
+macOS automatically allows local network access for Terminal-launched processes.
+
 ## Downloading
 
 The links below provide **upstream IINA builds**, not builds of this fork. To use
@@ -140,15 +168,32 @@ The former `--yt-dlp-src` download option is no longer supported.
 
 ### Regression checks
 
-Run the focused subtitle-matching and playback-data/packaging checks:
+Run the focused subtitle-matching, playback-data/packaging, and playlist-startup checks:
 
 ```console
 bash other/tests/run-subtitle-matching-tests.sh
 bash other/tests/run-playback-data-tests.sh
+bash other/tests/run-playlist-startup-tests.sh
 ```
 
 These use temporary fixtures and test doubles, not the current user's playback
 data. They do not replace end-to-end playback or native UI testing.
+
+For native playlist-startup checks, build IINA, quit any other IINA instance,
+and run the following with `ffmpeg` available on `PATH`:
+
+```console
+ruby other/tests/run-playlist-startup-integration-tests.rb /path/to/IINA.app
+```
+
+This launches the provided app with temporary preferences and synthetic media
+served over localhost. It checks error skipping, the measured 10-second timeout,
+wraparound, exhaustion without retries, and cancellation after playback is ready
+(including intentionally paused playback). It does not modify installed apps,
+saved preferences, playback history, or existing watch-later data.
+These localhost/Terminal-launched checks do not validate macOS local-network
+authorization; also test an installed, signed app against a real LAN stream
+using Finder or the Dock.
 
 ## Contributing
 

@@ -1,1 +1,2 @@
 NSHumanReadableCopyright = "版权所有 © 2017-2025\nCollider LI 等人\n基于 GPLv3 发布。";
+NSLocalNetworkUsageDescription = "IINA 需要访问本地网络，以播放 IPTV 服务器及局域网内其他设备上的媒体。";

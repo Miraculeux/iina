@@ -620,6 +620,8 @@
 	</dict>
 	<key>NSPrefersDisplaySafeAreaCompatibilityMode</key>
 	<false/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>IINA needs local network access to play media from IPTV servers and other devices on your network.</string>
 	<key>NSServices</key>
 	<array>
 		<dict>
