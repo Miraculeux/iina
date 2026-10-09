@@ -895,7 +895,7 @@ class PlaylistTrackCellView: NSTableCellView {
         }
       } else {
         // get related data and schedule a reload
-        if Preference.bool(for: .prefetchPlaylistVideoDuration) {
+        if !item.isNetworkResource && Preference.bool(for: .prefetchPlaylistVideoDuration) {
           player.refreshCachedVideoInfo(forVideoPath: item.filename)
           // Only schedule a reload if data was obtained and cached to avoid looping
           if let cached = player.info.getCachedVideoDurationAndProgress(item.filename),

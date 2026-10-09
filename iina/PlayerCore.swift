@@ -2812,6 +2812,11 @@ class PlayerCore: NSObject {
 
   // MARK: - Sync with UI in MainWindow
 
+  private var needsPlaybackTimeUIUpdates: Bool {
+    isInMiniPlayer || needsTouchBar && TouchBarSettings.shared.showAppControls
+      || mainWindow.isUITimerNeeded()
+  }
+
   /// Assess the need for the timer that synchronizes the UI and start or stop it as needed.
   ///
   /// Call this when `syncUITimer` may need to be started, stopped, or needs its interval changed. It will figure out the correct action.
@@ -2829,19 +2834,13 @@ class PlayerCore: NSObject {
     } else if info.state == .paused {
       // Ensure IINA is absolutely idle when the video is paused.
       useTimer = false
-    } else if needsTouchBar && TouchBarSettings.shared.showAppControls || isInMiniPlayer {
-      // The timer can't be stopped if the mini player is being used as it always displays the OSC
-      // or if the timer is updating the information being displayed in the Touch Bar.
-      useTimer = true
-    } else if info.isNetworkResource {
-      // May need to show, hide, or update buffering indicator at any time.
-      useTimer = true
     } else {
-      // Need if fadeable views or OSD are visible.
-      useTimer = mainWindow.isUITimerNeeded()
+      useTimer = needsPlaybackTimeUIUpdates || info.isNetworkResource
     }
 
-    let timeInterval = TimeInterval(DurationDisplayTextField.precision >= 2 ? AppData.syncTimePreciseInterval : AppData.syncTimeInterval)
+    let timeInterval = info.isNetworkResource && !needsPlaybackTimeUIUpdates ?
+      AppData.syncTimeBackgroundInterval :
+      (DurationDisplayTextField.precision >= 2 ? AppData.syncTimePreciseInterval : AppData.syncTimeInterval)
 
     /// Invalidate existing timer:
     /// - if no longer needed
@@ -2875,8 +2874,9 @@ class PlayerCore: NSObject {
 
     // When fadeable views are hidden the time can get out of sync. This method will be called when
     // the view becomes visible to sync the time. If the timer was not running the view must be
-    // updated now. Playback may be paused. If that is the case then the timer will not be started.
-    if !wasTimerRunning {
+    // updated now, including when returning from the slower background timer. Playback may be
+    // paused. If that is the case then the timer will not be started.
+    if !wasTimerRunning || useTimer {
       syncUITime()
     }
 
@@ -2888,6 +2888,9 @@ class PlayerCore: NSObject {
       target: self,
       selector: #selector(self.syncUITime),
     )
+    if timeInterval == AppData.syncTimeBackgroundInterval {
+      syncUITimer?.tolerance = timeInterval * 0.1
+    }
   }
 
   func notifyWindowVideoSizeChanged() {
@@ -2937,13 +2940,14 @@ class PlayerCore: NSObject {
     info.constrainVideoPosition()
   }
 
-  /// Synchronize the cached video position if the timer that updates the cache is not running.
+  /// Synchronize the cached video position if the timer is stopped or running at the background rate.
   ///
   /// When portions of the UI that need the video position are visible (OSC, OSD), `syncUITimer` keeps the
   /// `info.videoPosition` property synchronized with mpv. Code outside of the UI needs to call this method before accessing
   /// the position to ensure the cache is up to date when the timer is not running..
   func syncPositionIfNeeded() {
-    if let syncUITimer, syncUITimer.isValid { return }
+    if let syncUITimer, syncUITimer.isValid,
+       syncUITimer.timeInterval != AppData.syncTimeBackgroundInterval { return }
     guard info.state.active else { return }
     syncPosition()
   }
@@ -2989,7 +2993,11 @@ class PlayerCore: NSObject {
         info.bufferingState = mpv.getInt(MPVProperty.cacheBufferingState)
       }
       DispatchQueue.main.async { [self] in
-        currentController.updatePlayTime(withDuration: isNetworkStream, andProgressBar: true)
+        if !isNetworkStream || needsPlaybackTimeUIUpdates {
+          currentController.updatePlayTime(withDuration: isNetworkStream, andProgressBar: true)
+        } else {
+          mainWindow.syncPIPPlaybackState()
+        }
         if !self.isInMiniPlayer && mainWindow.fsState.isFullscreen && mainWindow.displayTimeAndBatteryInFullScreen && !mainWindow.additionalInfoView.isHidden {
           self.mainWindow.additionalInfoView.update()
         }

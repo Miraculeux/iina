@@ -102,6 +102,20 @@ not expand into a channel playlist retain their existing behavior.
 
 ### Local network playback on macOS
 
+Network playlist entries are not opened separately to prefetch their duration or
+metadata. The currently playing entry can still show the duration reported by
+mpv; local-file duration prefetching is unchanged.
+
+When playback controls and the OSD are hidden, the network playback background
+timer runs once per second and skips hidden time-label and progress-bar updates.
+Buffering transitions are updated through mpv events. Showing the controls immediately
+refreshes their values and restores the normal refresh rate. Music Mode and
+active Touch Bar controls retain their normal refresh rate.
+
+After building, run the native network playback regression checks with
+`ruby other/tests/run-network-playback-integration-tests.rb build/Build/Products/Release/IINA.app`
+(requires `ffmpeg`). These checks use synthetic media served on localhost.
+
 On macOS 15 and later, allow IINA in **System Settings > Privacy & Security >
 Local Network** to play IPTV and other media hosted on your LAN. The app declares
 this usage with a localized permission description.

@@ -130,6 +130,7 @@ class MPVController: NSObject {
     MPVOption.TrackSelection.sid: MPV_FORMAT_INT64,
     MPVOption.Subtitles.secondarySid: MPV_FORMAT_INT64,
     MPVOption.PlaybackControl.pause: MPV_FORMAT_FLAG,
+    MPVProperty.pausedForCache: MPV_FORMAT_FLAG,
     MPVOption.PlaybackControl.loopPlaylist: MPV_FORMAT_STRING,
     MPVOption.PlaybackControl.loopFile: MPV_FORMAT_STRING,
     MPVProperty.chapter: MPV_FORMAT_INT64,
@@ -1306,6 +1307,10 @@ class MPVController: NSObject {
 
     case MPVProperty.chapter:
       DispatchQueue.main.async { self.player.chapterChanged() }
+
+    case MPVProperty.pausedForCache:
+      // Buffering transitions must update promptly even when hidden controls use a slower timer.
+      DispatchQueue.main.async { self.player.syncUI(.time) }
 
     case MPVOption.PlaybackControl.speed:
       guard let speed = UnsafePointer<Double>(OpaquePointer(property.data))?.pointee else {

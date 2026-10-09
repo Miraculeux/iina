@@ -13,6 +13,7 @@ struct AppData {
   /** time interval to sync play pos */
   static let syncTimeInterval: Double = 0.1
   static let syncTimePreciseInterval: Double = 0.04
+  static let syncTimeBackgroundInterval: Double = 1
 
   /** speed values when clicking left / right arrow button */
 
